@@ -3,6 +3,7 @@
 #define AP_PARAM_VEHICLE_NAME plane
 
 #include <AP_Common/AP_Common.h>
+#include <AP_Gripper/AP_Gripper.h>
 
 // Global parameter class.
 //
@@ -202,7 +203,7 @@ public:
         k_param_curr_amp_offset,
         k_param_NavEKF,  // deprecated - remove
         k_param_mission, // mission library
-        k_param_serial_manager_old, // serial manager library
+        k_param_serial_manager, // serial manager library
         k_param_NavEKF2_old,  // deprecated - remove
         k_param_land_pre_flare_alt, // unused - moved to AP_Landing
         k_param_land_pre_flare_airspeed = 149,  // unused - moved to AP_Landing
@@ -356,11 +357,15 @@ public:
         k_param_acro_yaw_rate,
         k_param_takeoff_throttle_max_t,
         k_param_autotune_options,
-        //265 Custom Parameters
-        k_param_prf,
+        
+        // 265, 266 not used
+
+        // k_param_pew_pew = 267, // pew pew parameters
+        k_param_pulse_rate_freq = 267,
         k_param_sc,
         k_param_pewpew,
         k_param_fire,
+
     };
 
     AP_Int16 format_version;
@@ -459,11 +464,11 @@ public:
     AP_Int8 takeoff_throttle_slewrate;
     AP_Float takeoff_pitch_limit_reduction_sec;
     AP_Int8 level_roll_limit;
-// Adding in custom Parameters
-    AP_Int16 prf;
+    AP_Int16 pulse_rate_freq;
     AP_Int16 sc;
     AP_Int8 pewpew;
     AP_Int8 fire;
+
 
 #if AP_TERRAIN_AVAILABLE
     AP_Int32 terrain_follow;
@@ -522,6 +527,11 @@ public:
     // home reset altitude threshold
     AP_Int8 home_reset_threshold;
 
+#if AP_GRIPPER_ENABLED
+    // Payload Gripper
+    AP_Gripper gripper;
+#endif
+
     AP_Int32 flight_options;
 
     AP_Int8 takeoff_throttle_accel_count;
@@ -529,10 +539,6 @@ public:
 
 #if AP_LANDINGGEAR_ENABLED
     AP_LandingGear landing_gear;
-#endif
-
-#if AC_PRECLAND_ENABLED
-    AC_PrecLand precland;
 #endif
 
     // crow flaps weighting

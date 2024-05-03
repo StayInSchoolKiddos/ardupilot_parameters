@@ -1,7 +1,5 @@
 #include "Plane.h"
 
-#include <AP_Gripper/AP_Gripper.h>
-
 /*
  *  ArduPlane parameter definitions
  *
@@ -29,7 +27,9 @@ const AP_Param::Info Plane::var_info[] = {
     // @User: Advanced
     GSCALAR(sysid_my_gcs,           "SYSID_MYGCS",    255),
 
-    // AP_SerialManager was here
+    // @Group: SERIAL
+    // @Path: ../libraries/AP_SerialManager/AP_SerialManager.cpp
+    GOBJECT(serial_manager, "SERIAL",   AP_SerialManager),
 
     // @Param: AUTOTUNE_LEVEL
     // @DisplayName: Autotune level
@@ -533,7 +533,7 @@ const AP_Param::Info Plane::var_info[] = {
     // @Param: PTCH_LIM_MIN_DEG
     // @DisplayName: Minimum Pitch Angle
     // @Description: Maximum pitch down angle commanded in modes with stabilized limits
-    // @Units: deg
+    // @Units: cdeg
     // @Range: -90 0
     // @Increment: 10
     // @User: Standard
@@ -728,6 +728,34 @@ const AP_Param::Info Plane::var_info[] = {
     // @User: Advanced
     GSCALAR(crash_accel_threshold,          "CRASH_ACC_THRESH",   0),
 
+    // @Param: PULSE_RATE_FREQ
+    // @DisplayName: Pulse Rate Freq
+    // @Description: Used to turn on the pew pew interfaced with compaion computer
+    // @Range 10 1000
+    // @User: Advanced
+    GSCALAR(pulse_rate_freq, "Pulse_Rate_Freq", 0),
+
+    // @Param: SC
+    // @DisplayName: Shot_Count
+    // @Description: Number of shots to fire
+    // @Range 10 1000
+    // @User: Advanced
+    GSCALAR(sc, "Shot_Count", 0),
+
+    // @Param: PEWPEW
+    // @DisplayName: Pew Pew
+    // @Description: Arms the pew pew
+    // @Range 10 1000
+    // @User: Advanced
+    GSCALAR(pewpew, "PEWPEW", 0),
+
+    // @Param: FIRE
+    // @DisplayName: FIRE
+    // @Description: Fires the trigger
+    // @Range 10 1000
+    // @User: Advanced
+    GSCALAR(fire, "FIRE", 0),
+
     // @Param: CRASH_DETECT
     // @DisplayName: Crash Detection
     // @Description: Automatically detect a crash during AUTO flight and perform the bitmask selected action(s). Disarm will turn off motor for safety and to help against burning out ESC and motor. Set to 0 to disable crash detection.
@@ -908,6 +936,12 @@ const AP_Param::Info Plane::var_info[] = {
     GOBJECT(camera_mount,           "MNT",  AP_Mount),
 #endif
 
+#if HAL_LOGGING_ENABLED
+    // @Group: LOG
+    // @Path: ../libraries/AP_Logger/AP_Logger.cpp
+    GOBJECT(logger,           "LOG",  AP_Logger),
+#endif
+
     // @Group: BATT
     // @Path: ../libraries/AP_BattMonitor/AP_BattMonitor.cpp
     GOBJECT(battery,                "BATT", AP_BattMonitor),
@@ -1068,7 +1102,11 @@ const AP_Param::GroupInfo ParametersG2::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("HOME_RESET_ALT", 11, ParametersG2, home_reset_threshold, 0),
 
-    // 12 was AP_Gripper
+#if AP_GRIPPER_ENABLED
+    // @Group: GRIP_
+    // @Path: ../libraries/AP_Gripper/AP_Gripper.cpp
+    AP_SUBGROUPINFO(gripper, "GRIP_", 12, ParametersG2, AP_Gripper),
+#endif
 
     // @Param: FLIGHT_OPTIONS
     // @DisplayName: Flight mode options
@@ -1242,41 +1280,8 @@ const AP_Param::GroupInfo ParametersG2::var_info[] = {
     // @Bitmask: 0:Roll,1:Pitch,2:Yaw
     // @User: Standard
     AP_GROUPINFO("AUTOTUNE_AXES", 34, ParametersG2, axis_bitmask, 7),
+    
 
-#if AC_PRECLAND_ENABLED
-    // @Group: PLND_
-    // @Path: ../libraries/AC_PrecLand/AC_PrecLand.cpp
-    AP_SUBGROUPINFO(precland, "PLND_", 35, ParametersG2, AC_PrecLand),
-#endif
-
-
-    // @Param: prf
-    // @DisplayName: PRF
-    // @Description: Trigger Pulse Repitition Frequency
-    // @Range: 0 5000
-    // @User: Advanced
-    GSCALAR(prf, "PRF", 0),
-
-    // @Param: SC
-    // @DisplayName: Shot Count
-    // @Description: Setting number of shots to be sent to source
-    // @Range: 0 5000
-    // @User: Advanced
-    GSCALAR(sc, "Shot Count", 0),
-
-        // @Param: pewpew
-    // @DisplayName: pewpew saftey
-    // @Description: Saftey switch for trigger
-    // @Range: 0 1
-    // @User: Advanced
-    GSCALAR(pewpew, "pewpew saftey", 0),
-
-        // @Param: fire
-    // @DisplayName: Fire
-    // @Description: RC Fire Switch
-    // @Range: 0 1
-    // @User: Advanced
-    GSCALAR(fire, "Fire", 0),
 
     AP_GROUPEND
 };
@@ -1375,8 +1380,23 @@ static const RCConversionInfo rc_option_conversion[] = {
 
 void Plane::load_parameters(void)
 {
-    AP_Vehicle::load_parameters(g.format_version, Parameters::k_format_version);
+    if (!g.format_version.load() ||
+        g.format_version != Parameters::k_format_version) {
 
+        // erase all parameters
+        hal.console->printf("Firmware change: erasing EEPROM...\n");
+        StorageManager::erase();
+        AP_Param::erase_all();
+
+        // save the current format version
+        g.format_version.set_and_save(Parameters::k_format_version);
+        hal.console->printf("done.\n");
+    }
+    g.format_version.set_default(Parameters::k_format_version);
+
+    uint32_t before = micros();
+    // Load all auto-loaded EEPROM variables
+    AP_Param::load_all();
     AP_Param::convert_old_parameters(&conversion_table[0], ARRAY_SIZE(conversion_table));
 
     // setup defaults in SRV_Channels
@@ -1501,16 +1521,32 @@ void Plane::load_parameters(void)
 
     g.use_reverse_thrust.convert_parameter_width(AP_PARAM_INT16);
 
+
+    // PARAMETER_CONVERSION - Added: Oct-2021
+#if HAL_EFI_ENABLED
+    {
+        // Find G2's Top Level Key
+        AP_Param::ConversionInfo info;
+        if (!AP_Param::find_top_level_key_by_pointer(&g2, info.old_key)) {
+            return;
+        }
+
+        const uint16_t old_index = 22;       // Old parameter index in g2
+        const uint16_t old_top_element = 86; // Old group element in the tree for the first subgroup element (see AP_PARAM_KEY_DUMP)
+        AP_Param::convert_class(info.old_key, &efi, efi.var_info, old_index, old_top_element, false);
+    }
+#endif
+
 #if AP_AIRSPEED_ENABLED
     // PARAMETER_CONVERSION - Added: Jan-2022
     {
         const uint16_t old_key = g.k_param_airspeed;
         const uint16_t old_index = 0;       // Old parameter index in the tree
-        AP_Param::convert_class(old_key, &airspeed, airspeed.var_info, old_index, true);
+        const uint16_t old_top_element = 0; // Old group element in the tree for the first subgroup element (see AP_PARAM_KEY_DUMP)
+        AP_Param::convert_class(old_key, &airspeed, airspeed.var_info, old_index, old_top_element, true);
     }
 #endif
 
-#if AP_INERTIALSENSOR_HARMONICNOTCH_ENABLED
 #if HAL_INS_NUM_HARMONIC_NOTCH_FILTERS > 1
     if (!ins.harmonic_notches[1].params.enabled()) {
         // notch filter parameter conversions (moved to INS_HNTC2) for 4.2.x, converted from fixed notch
@@ -1525,11 +1561,10 @@ void Plane::load_parameters(void)
         AP_Param::set_default_by_name("INS_HNTC2_HMNCS", 1);
     }
 #endif // HAL_INS_NUM_HARMONIC_NOTCH_FILTERS
-#endif  // AP_INERTIALSENSOR_HARMONICNOTCH_ENABLED
-
+    
     // PARAMETER_CONVERSION - Added: Mar-2022
 #if AP_FENCE_ENABLED
-    AP_Param::convert_class(g.k_param_fence, &fence, fence.var_info, 0, true);
+    AP_Param::convert_class(g.k_param_fence, &fence, fence.var_info, 0, 0, true);
 #endif
   
     // PARAMETER_CONVERSION - Added: Dec 2023
@@ -1545,38 +1580,34 @@ void Plane::load_parameters(void)
 
     landing.convert_parameters();
 
-    static const AP_Param::G2ObjectConversion g2_conversions[] {
-    // PARAMETER_CONVERSION - Added: Oct-2021
-#if HAL_EFI_ENABLED
-        { &efi, efi.var_info, 22 },
-#endif
+    // PARAMETER_CONVERSION - Added: Jan-2024 for Plane-4.6
 #if AP_STATS_ENABLED
-    // PARAMETER_CONVERSION - Added: Jan-2024 for Plane-4.6
-        { &stats, stats.var_info, 5 },
+    {
+        // Find G2's Top Level Key
+        AP_Param::ConversionInfo info;
+        if (!AP_Param::find_top_level_key_by_pointer(&g2, info.old_key)) {
+            return;
+        }
+
+        const uint16_t old_index = 5;       // Old parameter index in g2
+        const uint16_t old_top_element = 4037; // Old group element in the tree for the first subgroup element (see AP_PARAM_KEY_DUMP)
+        AP_Param::convert_class(info.old_key, &stats, stats.var_info, old_index, old_top_element, false);
+    }
 #endif
+    // PARAMETER_CONVERSION - Added: Jan-2024 for Plane-4.6
 #if AP_SCRIPTING_ENABLED
-    // PARAMETER_CONVERSION - Added: Jan-2024 for Plane-4.6
-        { &scripting, scripting.var_info, 14 },
-#endif
-#if AP_GRIPPER_ENABLED
-    // PARAMETER_CONVERSION - Added: Feb-2024 for Plane-4.6
-        { &gripper, gripper.var_info, 12 },
-#endif
-    };
+    {
+        // Find G2's Top Level Key
+        AP_Param::ConversionInfo info;
+        if (!AP_Param::find_top_level_key_by_pointer(&g2, info.old_key)) {
+            return;
+        }
 
-    AP_Param::convert_g2_objects(&g2, g2_conversions, ARRAY_SIZE(g2_conversions));
-
-    // PARAMETER_CONVERSION - Added: Feb-2024 for Copter-4.6
-#if HAL_LOGGING_ENABLED
-    AP_Param::convert_class(g.k_param_logger, &logger, logger.var_info, 0, true);
+        const uint16_t old_index = 14;       // Old parameter index in g2
+        const uint16_t old_top_element = 78; // Old group element in the tree for the first subgroup element (see AP_PARAM_KEY_DUMP)
+        AP_Param::convert_class(info.old_key, &scripting, scripting.var_info, old_index, old_top_element, false);
+    }
 #endif
 
-    static const AP_Param::TopLevelObjectConversion toplevel_conversions[] {
-#if AP_SERIALMANAGER_ENABLED
-        // PARAMETER_CONVERSION - Added: Feb-2024 for Plane-4.6
-        { &serial_manager, serial_manager.var_info, Parameters::k_param_serial_manager_old },
-#endif
-    };
-
-    AP_Param::convert_toplevel_objects(toplevel_conversions, ARRAY_SIZE(toplevel_conversions));
+    hal.console->printf("load_all took %uus\n", (unsigned)(micros() - before));
 }
