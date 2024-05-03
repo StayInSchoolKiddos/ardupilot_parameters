@@ -1249,6 +1249,35 @@ const AP_Param::GroupInfo ParametersG2::var_info[] = {
     AP_SUBGROUPINFO(precland, "PLND_", 35, ParametersG2, AC_PrecLand),
 #endif
 
+
+    // @Param: prf
+    // @DisplayName: PRF
+    // @Description: Trigger Pulse Repitition Frequency
+    // @Range: 0 5000
+    // @User: Advanced
+    GSCALAR(prf, "PRF", 0),
+
+    // @Param: SC
+    // @DisplayName: Shot Count
+    // @Description: Setting number of shots to be sent to source
+    // @Range: 0 5000
+    // @User: Advanced
+    GSCALAR(sc, "Shot Count", 0),
+
+        // @Param: pewpew
+    // @DisplayName: pewpew saftey
+    // @Description: Saftey switch for trigger
+    // @Range: 0 1
+    // @User: Advanced
+    GSCALAR(pewpew, "pewpew saftey", 0),
+
+        // @Param: fire
+    // @DisplayName: Fire
+    // @Description: RC Fire Switch
+    // @Range: 0 1
+    // @User: Advanced
+    GSCALAR(fire, "Fire", 0),
+
     AP_GROUPEND
 };
 

@@ -356,6 +356,11 @@ public:
         k_param_acro_yaw_rate,
         k_param_takeoff_throttle_max_t,
         k_param_autotune_options,
+        //265 Custom Parameters
+        k_param_prf,
+        k_param_sc,
+        k_param_pewpew,
+        k_param_fire,
     };
 
     AP_Int16 format_version;
@@ -454,6 +459,12 @@ public:
     AP_Int8 takeoff_throttle_slewrate;
     AP_Float takeoff_pitch_limit_reduction_sec;
     AP_Int8 level_roll_limit;
+// Adding in custom Parameters
+    AP_Int16 prf;
+    AP_Int16 sc;
+    AP_Int8 pewpew;
+    AP_Int8 fire;
+
 #if AP_TERRAIN_AVAILABLE
     AP_Int32 terrain_follow;
     AP_Int16 terrain_lookahead;
